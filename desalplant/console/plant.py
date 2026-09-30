@@ -6,6 +6,9 @@ from ..audit.event import Event
 from ..audit.recorder import Recorder
 from ..brine.stream import BrineStream
 from ..brine.valve import Valve
+from ..brine.exit import EmergencyExit
+from ..brine.limit import RecoveryLimit
+from ..brine.water_quality import WaterType
 from ..chem.doser import Doser
 from ..chem.tank import ChemicalTank
 from ..clock import LogicalClock
@@ -43,12 +46,14 @@ PRODUCE_LEVEL = 68.0
 MAINTENANCE_EFFICIENCY = 0.8
 MAINTENANCE_DRAW = 0.1
 LAST_STAGE_READINGS = {"s3": 5.0}
+RECOVERY_BAND = RecoveryLimit(min=30.0, max=55.0)
 
 
 class Plant:
     """Every subsystem of the line, wired together behind the console."""
 
-    def __init__(self, store: Store, clock: LogicalClock, recorder: Recorder) -> None:
+    def __init__(self, store: Store, clock: LogicalClock, recorder: Recorder,
+                 water: WaterType = WaterType.BRACKISH) -> None:
         self.store = store
         self.clock = clock
         self.recorder = recorder
@@ -69,6 +74,14 @@ class Plant:
         self.output = Output()
         self.recovery = Recovery()
         self.valve = Valve()
+        self.emergency_exit = EmergencyExit(
+            self.recovery,
+            self.valve,
+            RECOVERY_BAND,
+            water=water,
+            recorder=recorder,
+            clock=clock,
+        )
         self.hp_pump = new()
         self.flusher = Flusher()
         self.rinse = RinseCycle()
@@ -145,6 +158,47 @@ class Plant:
         """Pressure differential over the array's final stage."""
         return differential(self.hp_pump, self.array, dict(LAST_STAGE_READINGS))
 
+    # ---------------------------------------------------- recovery emergency
+
+    def trip_recovery_alarm(self, rate: float | None = None) -> Event:
+        """Raise the recovery alarm and drive the valve to emergency."""
+        self.clock.advance()
+        if rate is not None:
+            self.recovery.update_rate(rate)
+        self.recovery.raise_alarm()
+        self.emergency_exit.trip()
+        return self.recorder.log("recovery_alarm", "recovery alarm raised, valve in emergency")
+
+    def exit_recovery_emergency(self) -> Event:
+        """Advance the emergency release by one program step.
+
+        Water type fixes whether a single call releases the valve in one move
+        (brackish) or whether three calls walk it crack -> throttle -> open,
+        re-confirming the alarm condition before every step (seawater).
+        """
+        state_value = self.emergency_exit.state.value
+        if state_value == "emergency":
+            # first request: re-confirm condition and arm the release
+            state = self.emergency_exit.trigger()
+        elif state_value in ("armed", "stepping"):
+            # each later request opens exactly one confirmed step
+            state = self.emergency_exit.advance()
+        else:
+            # completed or rolled-back: no further progress here
+            state = self.emergency_exit.state
+        return self.recorder.log(
+            "recovery_exit",
+            f"emergency release tick, state={state.value}, mode={self.emergency_exit.mode.value}",
+        )
+
+    def retry_recovery_exit(self) -> Event:
+        """Attempt the release again after a rollback once water is healthy."""
+        state = self.emergency_exit.retry()
+        return self.recorder.log(
+            "recovery_exit",
+            f"emergency release retry, state={state.value}, mode={self.emergency_exit.mode.value}",
+        )
+
     # --------------------------------------------------------------- reading
 
     def status(self) -> dict[str, Any]:
@@ -164,6 +218,8 @@ class Plant:
             "valve_open": self.valve.open,
             "valve_stressed": self.valve.stressed,
             "valve_emergency": self.valve.emergency,
+            "recovery_exit_state": self.emergency_exit.state.value,
+            "recovery_exit_mode": self.emergency_exit.mode.value,
             "pump_pressure": self.hp_pump.pressure,
             "supply": self.hp_pump.supply,
             "stalled": self.hp_pump.stalled,

@@ -29,3 +29,37 @@ def maintain(console, request: Request) -> Response:
     request.body()
     event = console.plant.maintain()
     return json_response({"status": "maintained", "event": event.to_dict()})
+
+
+def trip_recovery(console, request: Request) -> Response:
+    """Raise the recovery alarm and put the valve in emergency."""
+    body = request.body()
+    rate = body.get("rate") if isinstance(body, dict) else None
+    event = console.plant.trip_recovery_alarm(rate=rate)
+    return json_response({"status": "tripped", "event": event.to_dict()})
+
+
+def exit_recovery(console, request: Request) -> Response:
+    """Advance the audited emergency release by one step."""
+    request.body()
+    plant = console.plant
+    event = plant.exit_recovery_emergency()
+    return json_response({
+        "status": plant.emergency_exit.state.value,
+        "mode": plant.emergency_exit.mode.value,
+        "valve_emergency": plant.valve.emergency,
+        "event": event.to_dict(),
+    })
+
+
+def retry_recovery(console, request: Request) -> Response:
+    """Retry the emergency release after a rollback once water is healthy."""
+    request.body()
+    plant = console.plant
+    event = plant.retry_recovery_exit()
+    return json_response({
+        "status": plant.emergency_exit.state.value,
+        "mode": plant.emergency_exit.mode.value,
+        "valve_emergency": plant.valve.emergency,
+        "event": event.to_dict(),
+    })

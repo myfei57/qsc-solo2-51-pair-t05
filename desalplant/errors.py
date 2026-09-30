@@ -80,3 +80,11 @@ class UnknownKeyError(ContractError):
 
 class StoreError(ContractError):
     """Raised when the file-backed store cannot persist a write."""
+
+
+class ExitStepFailedError(ContractError):
+    """Raised when one step of a staged exit cannot be confirmed."""
+
+
+class ExitNotArmedError(ContractError):
+    """Raised when an exit is advanced or completed without an armed procedure."""

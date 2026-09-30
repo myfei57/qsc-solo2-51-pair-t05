@@ -5,6 +5,8 @@ from typing import Any, Callable
 from ..errors import (
     AlarmNotActiveError,
     ContractError,
+    ExitNotArmedError,
+    ExitStepFailedError,
     FeedAlreadyStoppedError,
     FlushNotEffectiveError,
     FlowNotReadyError,
@@ -43,6 +45,8 @@ CONFLICT = (
     TransferFailedError,
     RinseFailedError,
     MediaNotReadyError,
+    ExitNotArmedError,
+    ExitStepFailedError,
 )
 MALFORMED = (InvalidEfficiencyError, InvalidStagesError)
 MISSING = (UnknownKeyError,)
@@ -53,6 +57,9 @@ ROUTES: tuple[tuple[str, str, Handler], ...] = (
     ("POST", routes.SHUTDOWN, operations.shutdown),
     ("POST", routes.SWITCH, operations.switch),
     ("POST", routes.MAINTAIN, operations.maintain),
+    ("POST", routes.RECOVERY_TRIP, operations.trip_recovery),
+    ("POST", routes.RECOVERY_EXIT, operations.exit_recovery),
+    ("POST", routes.RECOVERY_RETRY, operations.retry_recovery),
 )
 
 

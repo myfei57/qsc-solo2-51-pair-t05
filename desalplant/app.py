@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from .audit.recorder import Recorder
+from .brine.water_quality import WaterType
 from .clock import LogicalClock
 from .config import Config
 from .console.plant import Plant
@@ -32,7 +33,11 @@ def build_application(config: Config) -> Application:
     store = Store(config.store_path())
     clock = LogicalClock()
     recorder = Recorder(store, clock)
-    plant = Plant(store, clock, recorder)
+    try:
+        water = WaterType(config.water)
+    except ValueError:
+        raise ValueError(f"unknown feedwater type: {config.water!r}") from None
+    plant = Plant(store, clock, recorder, water=water)
     console = Console(plant)
     return Application(
         config=config,
