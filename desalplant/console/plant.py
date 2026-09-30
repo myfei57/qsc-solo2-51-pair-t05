@@ -4,11 +4,13 @@ from typing import Any
 
 from ..audit.event import Event
 from ..audit.recorder import Recorder
+from ..brine.exit import EmergencyExit, ExitReading, WaterQuality, default_plan
 from ..brine.stream import BrineStream
 from ..brine.valve import Valve
 from ..chem.doser import Doser
 from ..chem.tank import ChemicalTank
 from ..clock import LogicalClock
+from ..config import Config
 from ..filter.media import MediaFilter
 from ..filter.rack import Rack
 from ..flush.rinse import RinseCycle
@@ -48,7 +50,9 @@ LAST_STAGE_READINGS = {"s3": 5.0}
 class Plant:
     """Every subsystem of the line, wired together behind the console."""
 
-    def __init__(self, store: Store, clock: LogicalClock, recorder: Recorder) -> None:
+    def __init__(
+        self, store: Store, clock: LogicalClock, recorder: Recorder, config: Config
+    ) -> None:
         self.store = store
         self.clock = clock
         self.recorder = recorder
@@ -76,6 +80,15 @@ class Plant:
         self.product = ProductTank()
         self.level = Level()
         self.brine_stream = BrineStream(concentration=0.6)
+        self.water_quality = WaterQuality(config.water_quality)
+        self.emergency_exit = EmergencyExit(
+            valve=self.valve,
+            recovery=self.recovery,
+            recorder=self.recorder,
+            clock=self.clock,
+            plan=default_plan(self.water_quality),
+            reader=self._exit_reading,
+        )
 
     # ------------------------------------------------------------- lifecycle
 
@@ -141,6 +154,28 @@ class Plant:
         self.store.put(keys.PLANT_MAINTAINED_AT, self.clock.tick)
         return self.recorder.log("maintain", "maintenance completed")
 
+    # ------------------------------------------------------- emergency exit
+
+    def _exit_reading(self) -> ExitReading:
+        """Current readings that gate the emergency exit."""
+        return ExitReading(
+            recovery_rate=self.recovery.rate(),
+            conductivity=self.permeate.conductivity,
+            alarm_active=self.recovery.active(),
+        )
+
+    def trigger_emergency_exit(self) -> bool:
+        """Begin the sequenced exit from the emergency position.
+
+        Idempotent per recovery alarm: a duplicate trigger for the same alarm
+        does not start a second exit.
+        """
+        return self.emergency_exit.trigger(self.recovery.alarm_id)
+
+    def advance_emergency_exit(self):
+        """Advance the emergency exit by one tick."""
+        return self.emergency_exit.advance()
+
     def pump_differential(self) -> float:
         """Pressure differential over the array's final stage."""
         return differential(self.hp_pump, self.array, dict(LAST_STAGE_READINGS))
@@ -172,6 +207,8 @@ class Plant:
             "rack_blocked": self.rack.blocked,
             "flush_started": self.flusher.started,
             "flush_effective": self.flusher.effective,
+            "water_quality": self.water_quality.value,
+            "emergency_exit_state": self.emergency_exit.state.value,
             "store_entries": checkpoint.count,
         }
 

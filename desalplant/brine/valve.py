@@ -11,15 +11,29 @@ class Valve:
         self.emergency = False
         self.stressed = False
         self.stuck = stuck
+        self.opening = 0.0
 
     def open_valve(self) -> None:
         """Open the valve; a stuck actuator leaves the outlet shut."""
         if not self.stuck:
             self.open = True
+            self.opening = 1.0
 
     def close_valve(self) -> None:
         """Close the valve."""
         self.open = False
+        self.opening = 0.0
+
+    def set_opening(self, fraction: float) -> None:
+        """Set the valve opening as a fraction in ``[0, 1]``.
+
+        A stuck actuator leaves the outlet shut; the open flag follows
+        whether any opening was demanded.
+        """
+        if self.stuck:
+            return
+        self.opening = max(0.0, min(1.0, float(fraction)))
+        self.open = self.opening > 0.0
 
     def pressurize(self, pressure: float) -> None:
         """Pressurise the housing, flagging stress when the outlet is shut."""

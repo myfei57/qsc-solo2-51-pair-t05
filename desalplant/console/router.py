@@ -53,6 +53,8 @@ ROUTES: tuple[tuple[str, str, Handler], ...] = (
     ("POST", routes.SHUTDOWN, operations.shutdown),
     ("POST", routes.SWITCH, operations.switch),
     ("POST", routes.MAINTAIN, operations.maintain),
+    ("POST", routes.EXIT_TRIGGER, operations.trigger_exit),
+    ("POST", routes.EXIT_ADVANCE, operations.advance_exit),
 )
 
 

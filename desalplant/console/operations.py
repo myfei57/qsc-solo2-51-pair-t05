@@ -29,3 +29,30 @@ def maintain(console, request: Request) -> Response:
     request.body()
     event = console.plant.maintain()
     return json_response({"status": "maintained", "event": event.to_dict()})
+
+
+def trigger_exit(console, request: Request) -> Response:
+    """Begin the sequenced exit from the emergency position."""
+    request.body()
+    started = console.plant.trigger_emergency_exit()
+    return json_response(
+        {
+            "started": started,
+            "state": console.plant.emergency_exit.state.value,
+            "alarm_id": console.plant.emergency_exit.alarm_id,
+        }
+    )
+
+
+def advance_exit(console, request: Request) -> Response:
+    """Advance the emergency exit by one tick."""
+    request.body()
+    state = console.plant.advance_emergency_exit()
+    return json_response(
+        {
+            "state": state.value,
+            "step_index": console.plant.emergency_exit.step_index,
+            "valve_emergency": console.plant.valve.emergency,
+            "valve_opening": console.plant.valve.opening,
+        }
+    )

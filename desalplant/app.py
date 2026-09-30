@@ -32,7 +32,7 @@ def build_application(config: Config) -> Application:
     store = Store(config.store_path())
     clock = LogicalClock()
     recorder = Recorder(store, clock)
-    plant = Plant(store, clock, recorder)
+    plant = Plant(store, clock, recorder, config)
     console = Console(plant)
     return Application(
         config=config,

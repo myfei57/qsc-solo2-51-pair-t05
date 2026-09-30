@@ -1,20 +1,25 @@
 """Recovery latch that freezes the rate while it is raised."""
 
+from ..ns.ids import new_id
+
 
 class Recovery:
     """Recovery rate with a latch that blocks rate updates."""
 
     def __init__(self) -> None:
         self.alarm = False
+        self.alarm_id = ""
         self._rate = 0.0
 
     def raise_alarm(self) -> None:
         """Raise the latch so the rate stops following the line."""
         self.alarm = True
+        self.alarm_id = new_id()
 
     def clear_alarm(self) -> None:
         """Clear the latch."""
         self.alarm = False
+        self.alarm_id = ""
 
     def active(self) -> bool:
         """Whether the latch is raised."""

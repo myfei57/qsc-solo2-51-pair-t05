@@ -11,6 +11,7 @@ class Config:
     host: str = "127.0.0.1"
     port: int = 8080
     data_dir: str = "data"
+    water_quality: str = "fresh"
 
     def listen(self) -> tuple[str, int]:
         """Address tuple handed to the HTTP server."""
